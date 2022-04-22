@@ -354,9 +354,11 @@ class PixelNeRFTrainer(trainlib.Trainer):
         return vis, vals
 
 #AC Start: Setup wandb
-wandb.init(project="pixel_nerf", entity="cs280_final_proj")
 tag = input("Provide a tag for wandb run: ")
-wandb.config({"tag": tag})
+config = {"tag": tag}
+wandb.init(project="pixel_nerf", 
+           entity="cs280_final_proj",
+           config=config)
 #AC End
 
 trainer = PixelNeRFTrainer()

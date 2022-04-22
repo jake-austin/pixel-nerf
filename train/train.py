@@ -18,6 +18,7 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from dotmap import DotMap
+import wandb
 
 
 def extra_args(parser):
@@ -215,6 +216,12 @@ class PixelNeRFTrainer(trainlib.Trainer):
             loss.backward()
         loss_dict["t"] = loss.item()
 
+        #AC Start: Log loss terms to wandb
+        wandb.log({"Coarse Loss": loss_dict["rc"],
+                   "Fine Loss": loss_dict["rf"],
+                   "Total Loss": loss_dict["t"]})
+        #AC End
+
         return loss_dict
 
     def train_step(self, data, global_step):
@@ -335,10 +342,22 @@ class PixelNeRFTrainer(trainlib.Trainer):
         vals = {"psnr": psnr}
         print("psnr", psnr)
 
+        #AC START: Log gt, rgb pred, captioned with PSNR
+        example = np.hstack((gt, rgb_psnr))
+        img = wandb.Image(example, caption=f"PSNR: {psnr:.2f}")
+        wandb.log({"examples": img})
+        #AC END
+
+
         # set the renderer network back to train mode
         renderer.train()
         return vis, vals
 
+#AC Start: Setup wandb
+wandb.init(project="pixel_nerf", entity="cs280_final_proj")
+tag = input("Provide a tag for wandb run: ")
+wandb.config({"tag": tag})
+#AC End
 
 trainer = PixelNeRFTrainer()
 trainer.start()

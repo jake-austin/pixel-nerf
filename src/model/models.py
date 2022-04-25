@@ -314,6 +314,8 @@ class PixelNeRFNet(torch.nn.Module):
         if osp.exists(ckpt_path):
             copyfile(ckpt_path, ckpt_backup_path)
 
+        torch.save(self.state_dict(), ckpt_path)
+
         #AC Start: If just finished starting an hour save special ckpt
         if train_dur is not None:
             hours = train_dur // (60 * 60)
@@ -323,6 +325,4 @@ class PixelNeRFNet(torch.nn.Module):
                 copyfile(ckpt_path, ckpt_hours_path)
         #AC End
 
-
-        torch.save(self.state_dict(), ckpt_path)
         return self

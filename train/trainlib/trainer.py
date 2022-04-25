@@ -4,6 +4,7 @@ import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import tqdm
 import warnings
+import time
 
 
 class Trainer:
@@ -150,6 +151,7 @@ class Trainer:
 
         step_id = self.start_iter_id
 
+        TRAIN_START = time.time() #AC: time training started
         progress = tqdm.tqdm(bar_format="[{rate_fmt}] ")
         for epoch in range(self.num_epochs):
             self.writer.add_scalar(
@@ -188,7 +190,10 @@ class Trainer:
                     if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
                         print("saving")
                         if self.managed_weight_saving:
-                            self.net.save_weights(self.args)
+                            #AC: Pass cumulative training time to weight saver
+                            train_dur = time.time() - TRAIN_START
+                            self.net.save_weights(self.args, train_dur=train_dur)
+                            #AC End
                         else:
                             torch.save(
                                 self.net.state_dict(), self.default_net_state_path

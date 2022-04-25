@@ -297,10 +297,11 @@ class PixelNeRFNet(torch.nn.Module):
             )
         return self
 
-    def save_weights(self, args, opt_init=False):
+    def save_weights(self, args, opt_init=False, train_dur=None):
         """
         Helper for saving weights according to argparse arguments
         :param opt_init if true, saves from init checkpoint instead of usual
+        :param train_dur number of seconds we've trained so far this run
         """
         from shutil import copyfile
 
@@ -312,5 +313,16 @@ class PixelNeRFNet(torch.nn.Module):
 
         if osp.exists(ckpt_path):
             copyfile(ckpt_path, ckpt_backup_path)
+
+        #AC Start: If just finished starting an hour save special ckpt
+        if train_dur is not None:
+            hours = train_dur // (60 * 60)
+            hours_name = "pixel_nerf_{hours}htr"
+            ckpt_hours_path = osp.join(args.checkpoints_path, args.name, hours_name)
+            if not osp.exists(ckpt_hours_path):
+                copyfile(ckpt_path, ckpt_hours_path)
+        #AC End
+
+
         torch.save(self.state_dict(), ckpt_path)
         return self

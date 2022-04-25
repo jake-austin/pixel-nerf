@@ -319,7 +319,7 @@ class PixelNeRFNet(torch.nn.Module):
         #AC Start: If just finished starting an hour save special ckpt
         if train_dur is not None:
             hours = train_dur // (60 * 60)
-            hours_name = f"pixel_nerf_{hours}htr"
+            hours_name = f"pixel_nerf_{hours:.0f}htr"
             ckpt_hours_path = osp.join(args.checkpoints_path, args.name, hours_name)
             if not osp.exists(ckpt_hours_path):
                 copyfile(ckpt_path, ckpt_hours_path)

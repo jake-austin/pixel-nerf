@@ -470,6 +470,30 @@ def combine_interleaved(t, inner_dims=(1,), agg_type="average"):
         raise NotImplementedError("Unsupported combine type " + agg_type)
     return t
 
+#AC start: reshape to pull out num source views for transformer use
+def transformer_prepare(t, inner_dims=(1,)):
+    # [SB x NV x B, D] => [SB x B, NV, D]
+    NV, B = inner_dims
+    t = t.reshape(-1, *inner_dims, *t.shape[1:]) # [SB, NV, B, D]
+    t = t.transpose(dim0=1, dim1=2) # [SB, B, NV, D]
+    t = t.reshape(-1, NV, *t.shape[3:])
+    return t
+
+def transformer_combine(t, inner_dims=(1,), agg_type="average"):
+    # [SB x B, NV, D] => [SB, B, D]
+    NV, B = inner_dims
+    if agg_type == "average":
+        t = torch.mean(t, dim=1)
+    elif agg_type == "max":
+        t = torch.max(t, dim=1)[0]
+    else:
+        raise NotImplementedError("Unsupported combine type " + agg_type)
+    # t [SB x B, D]
+    t = t.reshape(-1, B, *t.shape[1:])
+    return t
+
+#AC end
+
 
 def psnr(pred, target):
     """

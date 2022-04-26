@@ -74,6 +74,7 @@ class ResnetFC(nn.Module):
         combine_layer=1000,
         combine_type="average",
         use_spade=False,
+        use_transformer=False,
     ):
         """
         :param d_in input size
@@ -82,6 +83,7 @@ class ResnetFC(nn.Module):
         :param d_latent latent size, added in each resnet block (0 = disable)
         :param d_hidden hiddent dimension throughout network
         :param beta softplus beta, 100 is reasonable; if <=0 uses ReLU activations instead
+        :param use_transformer whether we use source view transformer or not
         """
         super().__init__()
         if d_in > 0:
@@ -100,12 +102,27 @@ class ResnetFC(nn.Module):
         self.d_hidden = d_hidden
 
         self.combine_layer = combine_layer
+        #AC Start: Should be true...
+        if self.combine_layer >= self.n_blocks:
+            raise Exception(f"Combine {self.combine_layer} >= N {self.n_blocks}")
+        #AC End
         self.combine_type = combine_type
         self.use_spade = use_spade
 
-        self.blocks = nn.ModuleList(
-            [ResnetBlockFC(d_hidden, beta=beta) for i in range(n_blocks)]
-        )
+        #AC Start: either resnet block FCs or transformer for pre pool ops
+        self.use_transformer = use_transformer
+        blocks = []
+        for i in range(n_blocks)
+            if i < self.combine_layer and self.use_transformer:
+                trans_args = {'d_model': d_hidden, 'nhead': 4,
+                              'feedforward': d_hidden * 2,
+                              'dropout': 0.05, 'batch_first': True}
+                blocks.append(TransformerEncoderLayer(**trans_args))
+            else:
+                blocks.append(ResnetBlockFC(d_hidden, beta=beta))
+        self.blocks = nn.ModuleList(blocks)
+        #AC End
+
 
         if d_latent != 0:
             n_lin_z = min(combine_layer, n_blocks)
@@ -136,6 +153,7 @@ class ResnetFC(nn.Module):
         Tensor will be reshaped to (-1, combine_inner_dims, ...) and reduced using combine_type
         on dim 1, at combine_layer
         """
+
         with profiler.record_function("resnetfc_infer"):
             assert zx.size(-1) == self.d_latent + self.d_in
             if self.d_latent > 0:
@@ -147,6 +165,11 @@ class ResnetFC(nn.Module):
                 x = self.lin_in(x)
             else:
                 x = torch.zeros(self.d_hidden, device=zx.device)
+
+            # AC Start: [SB x NV X B, D] => [SB x B, NV, D]
+            if self.use_transformer:
+                x = util.transformer_prepare(x, combine_inner_dims)
+            # AC End
 
             for blkid in range(self.n_blocks):
                 if blkid == self.combine_layer:
@@ -167,9 +190,17 @@ class ResnetFC(nn.Module):
                     #          reduce=combine_type,
                     #      )
                     #  else:
-                    x = util.combine_interleaved(
-                        x, combine_inner_dims, self.combine_type
-                    )
+
+                    # AC Start: Get to [SB, B, D] one way or another
+                    if self.use_transformer:
+                        x = util.transformer_combine(
+                            x, combine_inner_dims, self.combine_type
+                        )
+                    else:
+                        x = util.combine_interleaved(
+                            x, combine_inner_dims, self.combine_type
+                        )
+                    # AC End
 
                 if self.d_latent > 0 and blkid < self.combine_layer:
                     tz = self.lin_z[blkid](z)
@@ -194,5 +225,6 @@ class ResnetFC(nn.Module):
             combine_layer=conf.get_int("combine_layer", 1000),
             combine_type=conf.get_string("combine_type", "average"),  # average | max
             use_spade=conf.get_bool("use_spade", False),
+            use_transformer=conf.get_bool("source_view_transformer", False)
             **kwargs
         )

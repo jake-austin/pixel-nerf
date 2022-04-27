@@ -115,8 +115,8 @@ class ResnetFC(nn.Module):
         for i in range(self.n_blocks):
             if i < self.combine_layer and self.use_transformer:
                 trans_args = {'d_model': d_hidden, 'nhead': 4,
-                              'dim_feedforward': d_hidden * 2,
-                              'dropout': 0.05, 'batch_first': True}
+                              'dim_feedforward': d_hidden,
+                              'dropout': 0.0, 'batch_first': True}
                 blocks.append(nn.TransformerEncoderLayer(**trans_args))
             else:
                 blocks.append(ResnetBlockFC(d_hidden, beta=beta))

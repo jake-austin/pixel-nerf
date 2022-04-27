@@ -112,12 +112,12 @@ class ResnetFC(nn.Module):
         #AC Start: either resnet block FCs or transformer for pre pool ops
         self.use_transformer = use_transformer
         blocks = []
-        for i in range(n_blocks)
+        for i in range(self.n_blocks):
             if i < self.combine_layer and self.use_transformer:
                 trans_args = {'d_model': d_hidden, 'nhead': 4,
-                              'feedforward': d_hidden * 2,
+                              'dim_feedforward': d_hidden * 2,
                               'dropout': 0.05, 'batch_first': True}
-                blocks.append(TransformerEncoderLayer(**trans_args))
+                blocks.append(nn.TransformerEncoderLayer(**trans_args))
             else:
                 blocks.append(ResnetBlockFC(d_hidden, beta=beta))
         self.blocks = nn.ModuleList(blocks)
@@ -169,6 +169,7 @@ class ResnetFC(nn.Module):
             # AC Start: [SB x NV X B, D] => [SB x B, NV, D]
             if self.use_transformer:
                 x = util.transformer_prepare(x, combine_inner_dims)
+                z = util.transformer_prepare(z, combine_inner_dims)
             # AC End
 
             for blkid in range(self.n_blocks):
@@ -225,6 +226,6 @@ class ResnetFC(nn.Module):
             combine_layer=conf.get_int("combine_layer", 1000),
             combine_type=conf.get_string("combine_type", "average"),  # average | max
             use_spade=conf.get_bool("use_spade", False),
-            use_transformer=conf.get_bool("source_view_transformer", False)
+            use_transformer=conf.get_bool("source_view_transformer", False),
             **kwargs
         )

@@ -176,7 +176,7 @@ class ResnetFC(nn.Module):
                 cls_aug = cls_aug.repeat(x.shape[0], 1, 1)
                 x = torch.cat((cls_aug, x), dim=1)
                 z_cls_aug = torch.zeros([z.shape[0], 1, z.shape[2]])
-                z = torch.cat((z_cls_aug, z), dim=1)
+                z = torch.cat((z_cls_aug.to(z.get_device()), z), dim=1)
             # AC End
 
             for blkid in range(self.n_blocks):

@@ -216,10 +216,22 @@ class PixelNeRFTrainer(trainlib.Trainer):
             loss.backward()
         loss_dict["t"] = loss.item()
 
+        #AC Start: Compute PSNR
+        SB = all_rgb_gt.shape
+        coarse_psnr, fine_psnr = 0, 0
+        for i in range(SB):
+            coarse_psnr += util.psnr(coarse.rgb[i], all_rgb_gt[i]).item()
+            fine_psnr += util.psnr(fine.rgb[i], all_rgb_gt[i]).item()
+        coarse_psnr /= SB
+        fine_psnr /= SB
+        #AC End
+
         #AC Start: Log loss terms to wandb
         wandb.log({"Coarse Loss": loss_dict["rc"],
                    "Fine Loss": loss_dict["rf"],
-                   "Total Loss": loss_dict["t"]})
+                   "Total Loss": loss_dict["t"],
+                   "Coarse PSNR": coarse_psnr,
+                   "Fine PSNR": fine_psnr})
         #AC End
 
         return loss_dict

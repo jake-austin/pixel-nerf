@@ -217,7 +217,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         loss_dict["t"] = loss.item()
 
         #AC Start: Compute PSNR
-        SB = all_rgb_gt.shape
+        SB = all_rgb_gt.shape[0]
         coarse_psnr, fine_psnr = 0, 0
         for i in range(SB):
             coarse_psnr += util.psnr(coarse.rgb[i], all_rgb_gt[i]).item()

@@ -220,8 +220,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
         SB = all_rgb_gt.shape[0]
         coarse_psnr, fine_psnr = 0, 0
         for i in range(SB):
-            coarse_psnr += util.psnr(coarse.rgb[i], all_rgb_gt[i]).item()
-            fine_psnr += util.psnr(fine.rgb[i], all_rgb_gt[i]).item()
+            coarse_psnr += util.psnr(coarse.rgb[i], all_rgb_gt[i])
+            fine_psnr += util.psnr(fine.rgb[i], all_rgb_gt[i])
         coarse_psnr /= SB
         fine_psnr /= SB
         #AC End

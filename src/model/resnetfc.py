@@ -111,6 +111,7 @@ class ResnetFC(nn.Module):
 
         #AC Start: either resnet block FCs or transformer for pre pool ops
         self.use_transformer = use_transformer
+        self.cls_token = nn.Parameter(1e-3 * torch.randn([d_hidden]))
         blocks = []
         for i in range(self.n_blocks):
             if i < self.combine_layer and self.use_transformer:
@@ -170,6 +171,12 @@ class ResnetFC(nn.Module):
             if self.use_transformer:
                 x = util.transformer_prepare(x, combine_inner_dims)
                 z = util.transformer_prepare(z, combine_inner_dims)
+
+                cls_aug = self.cls_token.unsqueeze(0).unsqueeze(0)
+                cls_aug = cls_aug.repeat(x.shape[0], 1, 1)
+                x = torch.cat((cls_aug, x), dim=1)
+                z_cls_aug = torch.zeros([z.shape[0], 1, z.shape[2]])
+                z = torch.cat((z_cls_aug, z), dim=1)
             # AC End
 
             for blkid in range(self.n_blocks):
@@ -195,7 +202,7 @@ class ResnetFC(nn.Module):
                     # AC Start: Get to [SB, B, D] one way or another
                     if self.use_transformer:
                         x = util.transformer_combine(
-                            x, combine_inner_dims, self.combine_type
+                            x, combine_inner_dims
                         )
                     else:
                         x = util.combine_interleaved(

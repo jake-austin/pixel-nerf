@@ -479,15 +479,10 @@ def transformer_prepare(t, inner_dims=(1,)):
     t = t.reshape(-1, NV, *t.shape[3:])
     return t
 
-def transformer_combine(t, inner_dims=(1,), agg_type="average"):
-    # [SB x B, NV, D] => [SB, B, D]
+def transformer_combine(t, inner_dims=(1,)):
+    # [SB x B, NV+1, D] => [SB, B, D]
     NV, B = inner_dims
-    if agg_type == "average":
-        t = torch.mean(t, dim=1)
-    elif agg_type == "max":
-        t = torch.max(t, dim=1)[0]
-    else:
-        raise NotImplementedError("Unsupported combine type " + agg_type)
+    t = t[:, 0] # First element is special classifier token
     # t [SB x B, D]
     t = t.reshape(-1, B, *t.shape[1:])
     return t

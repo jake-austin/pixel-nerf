@@ -41,7 +41,7 @@ def extra_args(parser):
 
     parser.add_argument(
         "--wandb",
-        action="store_true",
+        action="store_false",
         default=True,
         help="Use weights and biases",
     )

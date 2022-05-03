@@ -88,6 +88,7 @@ renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
 
 nviews = list(map(int, args.nviews.split()))
+print(nviews)
 
 
 class PixelNeRFTrainer(trainlib.Trainer):

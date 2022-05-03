@@ -40,6 +40,13 @@ def extra_args(parser):
     )
 
     parser.add_argument(
+        "--wandb",
+        action="store_true",
+        default=True,
+        help="Use weights and biases",
+    )
+
+    parser.add_argument(
         "--no_bbox_step",
         type=int,
         default=100000,
@@ -227,11 +234,12 @@ class PixelNeRFTrainer(trainlib.Trainer):
         #AC End
 
         #AC Start: Log loss terms to wandb
-        wandb.log({"Coarse Loss": loss_dict["rc"],
-                   "Fine Loss": loss_dict["rf"],
-                   "Total Loss": loss_dict["t"],
-                   "Coarse PSNR": coarse_psnr,
-                   "Fine PSNR": fine_psnr})
+        if args.wandb:
+            wandb.log({"Coarse Loss": loss_dict["rc"],
+                    "Fine Loss": loss_dict["rf"],
+                    "Total Loss": loss_dict["t"],
+                    "Coarse PSNR": coarse_psnr,
+                    "Fine PSNR": fine_psnr})
         #AC End
 
         return loss_dict
@@ -355,9 +363,10 @@ class PixelNeRFTrainer(trainlib.Trainer):
         print("psnr", psnr)
 
         #AC START: Log gt, rgb pred, captioned with PSNR
-        example = np.hstack((gt, rgb_psnr))
-        img = wandb.Image(example, caption=f"PSNR: {psnr:.2f}")
-        wandb.log({"examples": img})
+        if args.wandb:
+            example = np.hstack((gt, rgb_psnr))
+            img = wandb.Image(example, caption=f"PSNR: {psnr:.2f}")
+            wandb.log({"examples": img})
         #AC END
 
 
@@ -366,11 +375,12 @@ class PixelNeRFTrainer(trainlib.Trainer):
         return vis, vals
 
 #AC Start: Setup wandb
-tag = input("Provide a tag for wandb run: ")
-config = {"tag": tag}
-wandb.init(project="pixel_nerf", 
-           entity="cs280_final_proj",
-           config=config)
+if args.wandb:
+    tag = input("Provide a tag for wandb run: ")
+    config = {"tag": tag}
+    wandb.init(project="pixel_nerf", 
+            entity="cs280_final_proj",
+            config=config)
 #AC End
 
 trainer = PixelNeRFTrainer()

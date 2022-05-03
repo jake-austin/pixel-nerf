@@ -62,6 +62,11 @@ def extra_args(parser):
 
 
 args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
+print("Config")
+for thing in conf:
+    print(thing)
+    print(conf[thing])
+    print()
 device = util.get_cuda(args.gpu_id[0])
 
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)

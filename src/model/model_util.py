@@ -1,5 +1,6 @@
 from .encoder import SpatialEncoder, ImageEncoder
 from .resnetfc import ResnetFC
+from .oracle import DepthOraclePool
 
 
 def make_mlp(conf, d_in, d_latent=0, allow_empty=False, **kwargs):
@@ -23,4 +24,13 @@ def make_encoder(conf, **kwargs):
         net = ImageEncoder.from_conf(conf, **kwargs)
     else:
         raise NotImplementedError("Unsupported encoder type")
+    return net
+
+def make_depth_oracle(conf, **kwargs):
+    oracle_type = conf.get_string("type", "pooling")
+    if oracle_type == "pooling":
+        net = DepthOraclePool.from_conf(conf, **kwargs)
+    else:
+        net = DepthOracleNormals.from_conf(conf, **kwargs)
+
     return net

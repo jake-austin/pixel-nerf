@@ -40,7 +40,7 @@ def extra_args(parser):
     )
 
     parser.add_argument(
-        "--wandb",
+        "--no_wandb",
         action="store_false",
         default=True,
         help="Use weights and biases",
@@ -88,7 +88,6 @@ renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
 
 nviews = list(map(int, args.nviews.split()))
-print(nviews)
 
 
 class PixelNeRFTrainer(trainlib.Trainer):
@@ -240,7 +239,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         #AC End
 
         #AC Start: Log loss terms to wandb
-        if args.wandb:
+        if args.no_wandb:
             wandb.log({"Coarse Loss": loss_dict["rc"],
                     "Fine Loss": loss_dict["rf"],
                     "Total Loss": loss_dict["t"],
@@ -369,7 +368,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         print("psnr", psnr)
 
         #AC START: Log gt, rgb pred, captioned with PSNR
-        if args.wandb:
+        if args.no_wandb:
             example = np.hstack((gt, rgb_psnr))
             img = wandb.Image(example, caption=f"PSNR: {psnr:.2f}")
             wandb.log({"examples": img})
@@ -380,8 +379,280 @@ class PixelNeRFTrainer(trainlib.Trainer):
         renderer.train()
         return vis, vals
 
+
+
+class OraclePixelNeRFTrainer(PixelNeRFTrainer):
+
+    # DONE
+    def __init__(self):
+        super().__init__(net, dset, val_dset, args, conf["train"], device=device)
+        self.renderer_state_path = "%s/%s/_renderer" % (
+            self.args.checkpoints_path,
+            self.args.name,
+        )
+
+        self.lambda_oracle = conf.get_float("loss.lambda_oracle")
+        self.lambda_fine = conf.get_float("loss.lambda_fine", 1.0)
+        print(
+            "lambda oracle {} and fine {}".format(self.lambda_coarse, self.lambda_fine)
+        )
+        #self.rgb_coarse_crit = loss.get_rgb_loss(conf["loss.rgb"], True) REPLACED BY BCE FOR ORACLE
+        fine_loss_conf = conf["loss.rgb"]
+        if "rgb_fine" in conf["loss"]:
+            print("using fine loss")
+            fine_loss_conf = conf["loss.rgb_fine"]
+        self.rgb_fine_crit = loss.get_rgb_loss(fine_loss_conf, False)
+
+        if args.resume:
+            if os.path.exists(self.renderer_state_path):
+                renderer.load_state_dict(
+                    torch.load(self.renderer_state_path, map_location=device)
+                )
+
+        self.z_near = dset.z_near
+        self.z_far = dset.z_far
+
+        self.use_bbox = args.no_bbox_step > 0
+
+    # DONE
+    def calc_losses(self, data, is_train=True, global_step=0):
+        if "images" not in data:
+            return {}
+        all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
+
+        SB, NV, _, H, W = all_images.shape
+        all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
+        all_bboxes = data.get("bbox")  # (SB, NV, 4)  cmin rmin cmax rmax
+        all_focals = data["focal"]  # (SB)
+        all_c = data.get("c")  # (SB)
+
+        if self.use_bbox and global_step >= args.no_bbox_step:
+            self.use_bbox = False
+            print(">>> Stopped using bbox sampling @ iter", global_step)
+
+        if not is_train or not self.use_bbox:
+            all_bboxes = None
+
+        all_rgb_gt = []
+        all_rays = []
+
+        curr_nviews = nviews[torch.randint(0, len(nviews), ()).item()]
+        if curr_nviews == 1:
+            image_ord = torch.randint(0, NV, (SB, 1))
+        else:
+            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
+        for obj_idx in range(SB):
+            if all_bboxes is not None:
+                bboxes = all_bboxes[obj_idx]
+            images = all_images[obj_idx]  # (NV, 3, H, W)
+            poses = all_poses[obj_idx]  # (NV, 4, 4)
+            focal = all_focals[obj_idx]
+            c = None
+            if "c" in data:
+                c = data["c"][obj_idx]
+            if curr_nviews > 1:
+                # Somewhat inefficient, don't know better way
+                image_ord[obj_idx] = torch.from_numpy(
+                    np.random.choice(NV, curr_nviews, replace=False)
+                )
+            images_0to1 = images * 0.5 + 0.5
+
+            cam_rays = util.gen_rays(
+                poses, W, H, focal, self.z_near, self.z_far, c=c
+            )  # (NV, H, W, 8)
+            rgb_gt_all = images_0to1
+            rgb_gt_all = (
+                rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
+            )  # (NV, H, W, 3)
+
+            if all_bboxes is not None:
+                pix = util.bbox_sample(bboxes, args.ray_batch_size)
+                pix_inds = pix[..., 0] * H * W + pix[..., 1] * W + pix[..., 2]
+            else:
+                pix_inds = torch.randint(0, NV * H * W, (args.ray_batch_size,))
+
+            rgb_gt = rgb_gt_all[pix_inds]  # (ray_batch_size, 3)
+            rays = cam_rays.view(-1, cam_rays.shape[-1])[pix_inds].to(
+                device=device
+            )  # (ray_batch_size, 8)
+
+            all_rgb_gt.append(rgb_gt)
+            all_rays.append(rays)
+
+        all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
+        all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
+
+        image_ord = image_ord.to(device)
+        src_images = util.batched_index_select_nd(
+            all_images, image_ord
+        )  # (SB, NS, 3, H, W)
+        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+
+        all_bboxes = all_poses = all_images = None
+
+        net.encode(
+            src_images,
+            src_poses,
+            all_focals.to(device=device),
+            c=all_c.to(device=device) if all_c is not None else None,
+        )
+
+
+        ### CHANGES START HERE
+        ### CHANGES START HERE
+        ### CHANGES START HERE
+
+
+        render_dict = DotMap(render_par(all_rays, want_weights=True,))
+        oracle = render_dict.oracle # We are now returning a dictionary for the oracle stuffs
+        fine = render_dict.fine
+
+        loss_dict = {}
+
+        oracle_loss = self.oracle_crit(oracle)
+        loss_dict["rc"] = oracle_loss.item() * self.lambda_coarse
+
+
+        fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
+        loss_dict["rf"] = fine_loss.item() * self.lambda_fine
+
+        full_loss = oracle_loss * self.lambda_coarse + fine_loss * self.lambda_fine
+
+        loss = full_loss
+        if is_train:
+            loss.backward()
+        loss_dict["t"] = loss.item()
+
+        #AC Start: Compute PSNR
+        SB = all_rgb_gt.shape[0]
+        fine_psnr = 0
+        for i in range(SB):
+            fine_psnr += util.psnr(fine.rgb[i], all_rgb_gt[i])
+        fine_psnr /= SB
+        #AC End
+
+        #AC Start: Log loss terms to wandb
+        if args.no_wandb:
+            wandb.log({"Coarse Loss": loss_dict["rc"],
+                    "Fine Loss": loss_dict["rf"],
+                    "Total Loss": loss_dict["t"],
+                    "Fine PSNR": fine_psnr})
+        #AC End
+
+        return loss_dict
+
+
+    def oracle_crit(self, oracle_outputs):
+        weights, depth_final = oracle_outputs
+
+
+    # DONE
+    def vis_step(self, data, global_step, idx=None):
+        if "images" not in data:
+            return {}
+        if idx is None:
+            batch_idx = np.random.randint(0, data["images"].shape[0])
+        else:
+            print(idx)
+            batch_idx = idx
+        images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
+        poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
+        focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
+        c = data.get("c")
+        if c is not None:
+            c = c[batch_idx : batch_idx + 1]  # (1)
+        NV, _, H, W = images.shape
+        cam_rays = util.gen_rays(
+            poses, W, H, focal, self.z_near, self.z_far, c=c
+        )  # (NV, H, W, 8)
+        images_0to1 = images * 0.5 + 0.5  # (NV, 3, H, W)
+
+        curr_nviews = nviews[torch.randint(0, len(nviews), (1,)).item()]
+        views_src = np.sort(np.random.choice(NV, curr_nviews, replace=False))
+        view_dest = np.random.randint(0, NV - curr_nviews)
+        for vs in range(curr_nviews):
+            view_dest += view_dest >= views_src[vs]
+        views_src = torch.from_numpy(views_src)
+
+        # set renderer net to eval mode
+        renderer.eval()
+        source_views = (
+            images_0to1[views_src]
+            .permute(0, 2, 3, 1)
+            .cpu()
+            .numpy()
+            .reshape(-1, H, W, 3)
+        )
+
+        gt = images_0to1[view_dest].permute(1, 2, 0).cpu().numpy().reshape(H, W, 3)
+        with torch.no_grad():
+            test_rays = cam_rays[view_dest]  # (H, W, 8)
+            test_images = images[views_src]  # (NS, 3, H, W)
+            net.encode(
+                test_images.unsqueeze(0),
+                poses[views_src].unsqueeze(0),
+                focal.to(device=device),
+                c=c.to(device=device) if c is not None else None,
+            )
+
+            ### CHANGES START HERE
+            ### CHANGES START HERE
+            ### CHANGES START HERE
+
+            test_rays = test_rays.reshape(1, H * W, -1)
+            render_dict = DotMap(render_par(test_rays, want_weights=True))
+            oracle = render_dict.oracle
+            fine = render_dict.fine
+
+
+            alpha_fine_np = fine.weights[0].sum(dim=1).cpu().numpy().reshape(H, W)
+            depth_fine_np = fine.depth[0].cpu().numpy().reshape(H, W)
+            rgb_fine_np = fine.rgb[0].cpu().numpy().reshape(H, W, 3)
+
+            print("f rgb min {} max {}".format(rgb_fine_np.min(), rgb_fine_np.max()))
+            print(
+                "f alpha min {}, max {}".format(
+                    alpha_fine_np.min(), alpha_fine_np.max()
+                )
+            )
+            depth_fine_cmap = util.cmap(depth_fine_np) / 255
+            alpha_fine_cmap = util.cmap(alpha_fine_np) / 255
+            vis_list = [
+                *source_views,
+                gt,
+                depth_fine_cmap,
+                rgb_fine_np,
+                alpha_fine_cmap,
+            ]
+
+            vis_fine = np.hstack(vis_list)
+            vis = np.vstack((vis_fine))
+            rgb_psnr = rgb_fine_np
+
+        psnr = util.psnr(rgb_psnr, gt)
+        vals = {"psnr": psnr}
+        print("psnr", psnr)
+
+        #AC START: Log gt, rgb pred, captioned with PSNR
+        if args.no_wandb:
+            example = np.hstack((gt, rgb_psnr))
+            img = wandb.Image(example, caption=f"PSNR: {psnr:.2f}")
+            wandb.log({"examples": img})
+        #AC END
+
+
+        # Set the renderer network back to train mode
+        renderer.train()
+        return vis, vals
+
+
+
+
+
+
+
 #AC Start: Setup wandb
-if args.wandb:
+if args.no_wandb:
     tag = input("Provide a tag for wandb run: ")
     config = {"tag": tag}
     wandb.init(project="pixel_nerf", 

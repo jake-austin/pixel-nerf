@@ -8,6 +8,40 @@ import torch.autograd.profiler as profiler
 import util
 
 
+class DepthOracleMemes(nn.Module):
+    def __init__(self, latent, d_hidden, d_out):
+
+        self.network = nn.Sequential(
+            []
+        )
+    
+
+    def forward(self, x):
+        """
+        x: tensor of shape (..., bins, dim)
+        """
+        
+
+    def get_encodings(self, latent):
+        """
+        Here is where you take in latents of shape (SB, NS, B, K, latent)
+        and then spit out whatever shape you will use in forward
+        """
+
+
+    @classmethod
+    def from_conf(cls, conf, d_latent, **kwargs):
+        # PyHocon construction
+        return cls(
+            d_latent,
+            d_hidden=conf.get_int("d_hidden", 128),
+            d_out=conf.get_int("output_bins")
+            **kwargs
+        )
+
+
+
+
 class DepthOracleNormals(nn.Module):
     def __init__(
         self,
@@ -26,8 +60,7 @@ class DepthOracleNormals(nn.Module):
         """
         
         self.network = nn.Sequential(
-            [nn.Linear(d_in + d_latent, d_hidden),
-            nn.ReLU()] + \
+            [nn.Linear(d_in + d_latent, d_hidden), nn.ReLU()] + \
             [nn.Linear(d_hidden, d_hidden), nn.ReLU()] * 7 + \
             [nn.Linear(d_hidden, d_out), nn.Sigmoid()]
         )
@@ -42,6 +75,13 @@ class DepthOracleNormals(nn.Module):
 
         with profiler.record_function("oracle_infer"):
             return self.network(x)
+
+
+    def get_encodings(self, latent):
+        """
+        Here is where you take in latents of shape (SB, NS, B, K, latent)
+        and then spit out whatever shape you will use in forward
+        """
 
 
     @classmethod

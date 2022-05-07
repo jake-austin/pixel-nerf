@@ -519,7 +519,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
         """
 
         # Grab encoder's latent code.
-        uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
+        uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B*K, 2)
 
         SB, B, _ = uv.shape
 
@@ -528,10 +528,10 @@ class OraclePixelNeRFNet(torch.nn.Module):
         )
         uv += repeat_interleave(
             self.c.unsqueeze(1), NS if self.c.shape[0] > 1 else 1
-        )  # (SB*NS, B, 2)
+        )  # (SB*NS, B*K, 2)
         latent = self.encoder.index(
             uv, None, self.image_shape
-        )  # (SB * NS, latent, B)
+        )  # (SB * NS, latent, B*K)
 
         latent_size = latent.shape[1]
 
@@ -541,8 +541,6 @@ class OraclePixelNeRFNet(torch.nn.Module):
         ### CHANGES START HERE
         ### CHANGES START HERE
         ### CHANGES START HERE
-
-        latent = latent.transpose(1, 2).reshape(SB, -1, B, latent_size)  # (SB, NS, B, latent)
 
 
 

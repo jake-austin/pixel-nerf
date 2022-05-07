@@ -383,7 +383,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
 class OraclePixelNeRFTrainer(PixelNeRFTrainer):
 
-    # DONE
+    # DONE, only changes were to variable names and printouts
     def __init__(self):
         super().__init__(net, dset, val_dset, args, conf["train"], device=device)
         self.renderer_state_path = "%s/%s/_renderer" % (
@@ -414,7 +414,7 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
 
         self.use_bbox = args.no_bbox_step > 0
 
-    # DONE
+    # DONE, removed coarse metrics and updated loss functions
     def calc_losses(self, data, is_train=True, global_step=0):
         if "images" not in data:
             return {}
@@ -497,19 +497,18 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
             c=all_c.to(device=device) if all_c is not None else None,
         )
 
-
-        ### CHANGES START HERE
-        ### CHANGES START HERE
-        ### CHANGES START HERE
-
-
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
+
+        ### CHANGES START HERE
+        ### CHANGES START HERE
+        ### CHANGES START HERE
+
         oracle = render_dict.oracle # We are now returning a dictionary for the oracle stuffs
         fine = render_dict.fine
 
         loss_dict = {}
 
-        oracle_loss = self.oracle_crit(oracle)
+        oracle_loss = self.oracle_crit(render_dict)
         loss_dict["rc"] = oracle_loss.item() * self.lambda_coarse
 
 
@@ -533,7 +532,7 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
 
         #AC Start: Log loss terms to wandb
         if args.no_wandb:
-            wandb.log({"Coarse Loss": loss_dict["rc"],
+            wandb.log({"Oracle Loss": loss_dict["rc"],
                     "Fine Loss": loss_dict["rf"],
                     "Total Loss": loss_dict["t"],
                     "Fine PSNR": fine_psnr})
@@ -542,9 +541,13 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
         return loss_dict
 
 
-    def oracle_crit(self, oracle_outputs):
-        weights, depth_final = oracle_outputs
-
+    def oracle_crit(self, render_dict):
+        """
+        This 
+        """
+        oracle = render_dict.oracle
+        fine = render_dict.fine
+        oracle_training = render_dict.oracle_training
 
     # DONE
     def vis_step(self, data, global_step, idx=None):

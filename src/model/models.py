@@ -4,7 +4,7 @@ Main model implementation
 import torch
 from .encoder import ImageEncoder
 from .code import PositionalEncoding
-from .model_util import make_encoder, make_mlp
+from .model_util import make_depth_oracle, make_encoder, make_mlp
 import torch.autograd.profiler as profiler
 from util import repeat_interleave
 import os
@@ -328,7 +328,7 @@ class PixelNeRFNet(torch.nn.Module):
         return self
 
 
-class OraclePixelNeRFNet(torchnn.Module):
+class OraclePixelNeRFNet(torch.nn.Module):
 
     def __init__(self, conf, stop_encoder_grad=False):
         super().__init__()
@@ -341,6 +341,8 @@ class OraclePixelNeRFNet(torchnn.Module):
         self.use_encoder = conf.get_bool("use_encoder", True)  # Image features?
 
         self.use_xyz = conf.get_bool("use_xyz", False)
+
+        self.num_oracle_training_rays = conf.get_bool("num_oracle_training_rays")
 
         assert self.use_encoder or self.use_xyz  # Must use some feature..
 
@@ -387,7 +389,8 @@ class OraclePixelNeRFNet(torchnn.Module):
         d_out = 4
 
         self.latent_size = self.encoder.latent_size
-        self.mlp_coarse = make_mlp(conf["mlp_coarse"], d_in, d_latent, d_out=d_out)
+        # Need to give the depth oracle the origin AND direction as the input dimension
+        self.mlp_oracle = make_depth_oracle(conf["mlp_oracle"], d_in * 2, self.encoder.latent_size)
         self.mlp_fine = make_mlp(
             conf["mlp_fine"], d_in, d_latent, d_out=d_out, allow_empty=True
         )
@@ -405,42 +408,47 @@ class OraclePixelNeRFNet(torchnn.Module):
         self.num_objs = 0
         self.num_views_per_obj = 1
 
-    # DONE
-    def forward(self, xyz, rays, oracle=True, far=False):
+
+    def forward(self, xyz, coarse=True, viewdirs=None, far=False, rays=None):
         """
         Predict (r, g, b, sigma) at world space points xyz.
         Please call encode first!
-        :param xyz (SB, NS, B, K, 3)
+        :param xyz (SB, B, K, 3) if coarse = True, else (SB, B*K, 3)
+        :param rays (SB*B, 8)
         SB is batch of objects
         B is batch of points (in rays)
-        NS is number of input views
         :return (SB, B, 4) r g b sigma
         """
         with profiler.record_function("model_inference"):
-            SB, B, K, _ = xyz.shape
             NS = self.num_views_per_obj
+
+            if coarse:
+                SB, B, K, _ = xyz.shape
+            else:
+                SB, B, _ = xyz.shape # In this case, B = B*K, but whatever
 
             xyz = xyz.reshape(SB, -1, 3)
 
             # Transform query points into the camera spaces of the input views
-            xyz = repeat_interleave(xyz, NS)  # (SB*NS, B, 3)
+            xyz = repeat_interleave(xyz, NS)  # (SB*NS, B*K, 3)
             xyz_rot = torch.matmul(self.poses[:, None, :3, :3], xyz.unsqueeze(-1))[
                 ..., 0
             ]
+            # (SB*NS, B*K, 3)
             xyz = xyz_rot + self.poses[:, None, :3, 3]
 
             # Get the encodings
-            if oracle:
+            if coarse:
                 mlp_input = self.get_oracle_encoding(xyz, xyz_rot, rays)
             else:
-                mlp_input = self.get_fine_encoding(xyz, xyz_rot)
+                mlp_input = self.get_fine_encoding(xyz, xyz_rot, viewdirs)
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None
             dim_size = None
 
             # Run main NeRF network
-            if oracle or self.mlp_fine is None:
+            if coarse:
                 mlp_output = self.mlp_oracle(
                     mlp_input,
                     combine_inner_dims=(self.num_views_per_obj, B),
@@ -448,7 +456,7 @@ class OraclePixelNeRFNet(torchnn.Module):
                     dim_size=dim_size,
                 )
 
-                return 
+                return mlp_output
 
             else:
                 mlp_output = self.mlp_fine(
@@ -473,6 +481,15 @@ class OraclePixelNeRFNet(torchnn.Module):
     def get_oracle_encoding(self, xyz, xyz_rot, rays):
 
         """
+        rays are in world coordinates (SB*B, 8)
+        xyz (SB*NS, B*K, 3)
+
+        SB is batch of objects
+        B is batch of points (in rays)
+        NS is number of input views
+
+
+
         ### Original Code:
 
         # Grab encoder's latent code.
@@ -527,10 +544,12 @@ class OraclePixelNeRFNet(torchnn.Module):
 
         latent = latent.transpose(1, 2).reshape(SB, -1, B, latent_size)  # (SB, NS, B, latent)
 
+
+
         return latent
 
-    #DONE
-    def get_fine_encoding(self, xyz, xyz_rot):
+    # DONE, this is just the original code to get the encodings
+    def get_fine_encoding(self, xyz, xyz_rot, viewdirs=None):
 
         # Getting the encoding
         if self.d_in > 0:
@@ -606,7 +625,7 @@ class OraclePixelNeRFNet(torchnn.Module):
         return mlp_input
 
 
-
+    # DONE, only need to change the kind of encoder itself
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
         :param images (NS, 3, H, W)
@@ -664,7 +683,8 @@ class OraclePixelNeRFNet(torchnn.Module):
         if self.use_global_encoder:
             self.global_encoder(images)
 
-
+    
+    # DONE, no changes made
     def load_weights(self, args, opt_init=False, strict=True, device=None):
         """
         Helper for loading weights according to argparse arguments.
@@ -696,7 +716,8 @@ class OraclePixelNeRFNet(torchnn.Module):
                 ).format(model_path)
             )
         return self
-
+    
+    # DONE, no changes made
     def save_weights(self, args, opt_init=False, train_dur=None):
         """
         Helper for saving weights according to argparse arguments

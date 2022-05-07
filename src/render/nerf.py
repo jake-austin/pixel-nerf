@@ -376,10 +376,10 @@ class OracleNeRFRenderer(NeRFRenderer):
     def forward(self, model, rays, want_weights=False, oracle=True):
         """
         :model nerf model, should return (SB, B, (r, g, b, sigma))
-        when called with (SB, B, (x, y, z)), for multi-object:
-        SB = 'super-batch' = size of object batch,
-        B  = size of per-object ray batch.
-        Should also support 'coarse' boolean argument for coarse NeRF.
+            when called with (SB, B, (x, y, z)), for multi-object:
+            SB = 'super-batch' = size of object batch,
+            B  = size of per-object ray batch.
+            Should also support 'coarse' boolean argument for coarse NeRF.
         :param rays ray spec [origins (3), directions (3), near (1), far (1)] (SB, B, 8)
         :param want_weights if true, returns compositing weights (SB, B, K)
         :return render dict
@@ -393,21 +393,23 @@ class OracleNeRFRenderer(NeRFRenderer):
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
 
-            z_coarse = self.sample_coarse(rays)  # (B, Kc)
+            z_coarse = self.sample_coarse(rays)  # (SB * B, Kc)
 
             ### CHANGES START HERE
             ### CHANGES START HERE
             ### CHANGES START HERE
 
             oracle_predictions = self.oracle_predictions(
-                model, rays, z_coarse, coarse=True, sb=superbatch_size,
+                model, rays, z_coarse, sb=superbatch_size,
             )
 
             outputs = DotMap(
-                oracle=self._format_outputs(
-                    oracle_predictions, superbatch_size, want_weights=want_weights,
-                ),
+                oracle = oracle_predictions
             )
+            with torch.no_grad():
+                indices = torch.randint(rays.shape[0], model.num_oracle_training_rays)
+                oracle_training_gt = self.composite(model, rays[indices], z_coarse[indices], coarse=False)
+            outputs.oracle_training = DotMap(indices=indices, oracle_training_gt=oracle_training_gt)
 
             if self.using_fine:
                 all_samps = [z_coarse]
@@ -430,102 +432,55 @@ class OracleNeRFRenderer(NeRFRenderer):
 
             return outputs
 
-
-    def oracle_predictions(self, model, rays, z_samp, coarse=True, sb=0):
+    # DONE
+    def oracle_predictions(self, model, rays, z_samp, sb=0):
         """
-        Render RGB and depth for each ray using NeRF alpha-compositing formula,
-        given sampled positions along each ray (see sample_*)
-        :param model should return (B, (r, g, b, sigma)) when called with (B, (x, y, z))
+        This needs to return "weights" and a final depth
+
+        This is basically the depth oracle version of the coarse sampling
+
+
+        model should return (B, (r, g, b, sigma)) when called with (B, (x, y, z))
         should also support 'coarse' boolean argument
-        :param rays ray [origins (3), directions (3), near (1), far (1)] (B, 8)
-        :param z_samp z positions sampled for each ray (B, K)
-        :param coarse whether to evaluate using coarse NeRF
+
+        :param rays ray [origins (3), directions (3), near (1), far (1)] (SB*B, 8)
+        :param z_samp z positions sampled for each ray (SB*B, K)
         :param sb super-batch dimension; 0 = disable
 
-        :return weights (B, K), rgb (B, 3), depth (B)
+        :return weights (B, K), depth (B)
         """
         with profiler.record_function("renderer_composite"):
             B, K = z_samp.shape
 
-            deltas = z_samp[:, 1:] - z_samp[:, :-1]  # (B, K-1)
-            #  if far:
-            #      delta_inf = 1e10 * torch.ones_like(deltas[:, :1])  # infty (B, 1)
-            delta_inf = rays[:, -1:] - z_samp[:, -1:]
-            deltas = torch.cat([deltas, delta_inf], -1)  # (B, K)
-
-            # (B, K, 3)
+            # (SB*B, K, 3)
             points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6]
 
+            points = points.reshape(sb, B, K, 3)
+
+            ### CHANGES TO COMPOSITE START HERE, MODEL EXPECTS POINTS IN 
             ### CHANGES TO COMPOSITE START HERE
             ### CHANGES TO COMPOSITE START HERE
-            ### CHANGES TO COMPOSITE START HERE
 
-            use_viewdirs = hasattr(model, "use_viewdirs") and model.use_viewdirs
+            # shape (SB*B, bins)
+            predictions = model(points, coarse=True, rays=rays)
 
-            val_all = []
-            if sb > 0:
-                points = points.reshape(
-                    sb, -1, 3
-                )  # (SB, B'*K, 3) B' is real ray batch size
-                eval_batch_size = (self.eval_batch_size - 1) // sb + 1
-                eval_batch_dim = 1
-            else:
-                eval_batch_size = self.eval_batch_size
-                eval_batch_dim = 0
+            _, bins = predictions.shape
 
-            split_points = torch.split(points, eval_batch_size, dim=eval_batch_dim)
-            if use_viewdirs:
-                dim1 = K
-                viewdirs = rays[:, None, 3:6].expand(-1, dim1, -1)  # (B, K, 3)
-                if sb > 0:
-                    viewdirs = viewdirs.reshape(sb, -1, 3)  # (SB, B'*K, 3)
-                else:
-                    viewdirs = viewdirs.reshape(-1, 3)  # (B*K, 3)
-                split_viewdirs = torch.split(
-                    viewdirs, eval_batch_size, dim=eval_batch_dim
-                )
-                for pnts, dirs in zip(split_points, split_viewdirs):
-                    val_all.append(model(pnts, coarse=coarse, viewdirs=dirs))
-            else:
-                for pnts in split_points:
-                    val_all.append(model(pnts, coarse=coarse))
-            points = None
-            viewdirs = None
-            # (B*K, 4) OR (SB, B'*K, 4)
-            out = torch.cat(val_all, dim=eval_batch_dim)
-            out = out.reshape(B, K, -1)  # (B, K, 4 or 5)
+            range = (rays[:, 8] - rays[:, 7]).reshape(B, 1)
+            z_nears = rays[:, 7].reshape(B, 1)
 
-            rgbs = out[..., :3]  # (B, K, 3)
-            sigmas = out[..., 3]  # (B, K)
-            if self.training and self.noise_std > 0.0:
-                sigmas = sigmas + torch.randn_like(sigmas) * self.noise_std
+            indices = (((z_samp + z_nears) / range).detach() * bins) // 1
 
-            alphas = 1 - torch.exp(-deltas * torch.relu(sigmas))  # (B, K)
-            deltas = None
-            sigmas = None
-            alphas_shifted = torch.cat(
-                [torch.ones_like(alphas[:, :1]), 1 - alphas + 1e-10], -1
-            )  # (B, K+1) = [1, a1, a2, ...]
-            T = torch.cumprod(alphas_shifted, -1)  # (B)
-            weights = alphas * T[:, :-1]  # (B, K)
-            alphas = None
-            alphas_shifted = None
+            # For each ray, we want to get the bin value at each index we have for that ray
+            weights = []
+            for i in range(B):
+                weights.append(predictions[i][indices[i]])
+            weights = torch.stack(weights).reshape(B, K)
 
-            rgb_final = torch.sum(weights.unsqueeze(-1) * rgbs, -2)  # (B, 3)
             depth_final = torch.sum(weights * z_samp, -1)  # (B)
-            if self.white_bkgd:
-                # White background
-                pix_alpha = weights.sum(dim=1)  # (B), pixel alpha
-                rgb_final = rgb_final + 1 - pix_alpha.unsqueeze(-1)  # (B, 3)
 
-
-
-
-
-
-
-
-            return (
-                weights,
-                depth_final,
+            return DotMap(
+                weights=weights,
+                depth_final=depth_final,
+                predictions=predictions
             )

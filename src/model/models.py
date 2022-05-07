@@ -441,7 +441,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
             if coarse:
                 mlp_input = self.get_oracle_encoding(xyz, xyz_rot, rays)
             else:
-                mlp_input = self.get_fine_encoding(xyz, xyz_rot, viewdirs)
+                mlp_input = self.get_fine_encoding(xyz, xyz_rot, SB, B, viewdirs)
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None
@@ -517,6 +517,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
             mlp_input = torch.cat((latent, z_feature), dim=-1)
         
         """
+        NS = self.num_views_per_obj
 
         # Grab encoder's latent code.
         uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B*K, 2)
@@ -562,7 +563,9 @@ class OraclePixelNeRFNet(torch.nn.Module):
 
 
     # DONE, this is just the original code to get the encodings
-    def get_fine_encoding(self, xyz, xyz_rot, viewdirs=None):
+    def get_fine_encoding(self, xyz, xyz_rot, SB, B, viewdirs=None):
+        
+        NS = self.num_views_per_obj
 
         # Getting the encoding
         if self.d_in > 0:

@@ -9,7 +9,11 @@ import util
 
 
 class DepthOracleMemes(nn.Module):
-    def __init__(self, latent, d_hidden, d_out):
+    def __init__(self, latent, d_hidden, bins):
+
+        self.latent = latent
+        self.d_hidden = d_hidden
+        self.bins = bins
 
         self.network = nn.Sequential(
             []
@@ -20,7 +24,7 @@ class DepthOracleMemes(nn.Module):
         """
         x: tensor of shape (..., bins, dim)
         """
-        
+
 
     def get_encodings(self, latent):
         """
@@ -35,7 +39,7 @@ class DepthOracleMemes(nn.Module):
         return cls(
             d_latent,
             d_hidden=conf.get_int("d_hidden", 128),
-            d_out=conf.get_int("output_bins")
+            bins=conf.get_int("output_bins")
             **kwargs
         )
 
@@ -47,7 +51,7 @@ class DepthOracleNormals(nn.Module):
         self,
         d_in,
         d_latent,
-        d_out=8,
+        bins=8,
         d_hidden=128,
     ):
         """
@@ -62,7 +66,7 @@ class DepthOracleNormals(nn.Module):
         self.network = nn.Sequential(
             [nn.Linear(d_in + d_latent, d_hidden), nn.ReLU()] + \
             [nn.Linear(d_hidden, d_hidden), nn.ReLU()] * 7 + \
-            [nn.Linear(d_hidden, d_out), nn.Sigmoid()]
+            [nn.Linear(d_hidden, bins), nn.Sigmoid()]
         )
 
 
@@ -91,6 +95,6 @@ class DepthOracleNormals(nn.Module):
             d_in,
             d_latent,
             d_hidden=conf.get_int("d_hidden", 128),
-            d_out=conf.get_int("output_bins")
+            bins=conf.get_int("output_bins")
             **kwargs
         )

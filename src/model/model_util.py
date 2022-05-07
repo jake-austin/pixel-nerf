@@ -1,6 +1,6 @@
 from .encoder import SpatialEncoder, ImageEncoder
 from .resnetfc import ResnetFC
-from .oracle import DepthOracleNormals
+from .oracle import DepthOracleNormals, DepthOracleMemes
 
 
 def make_mlp(conf, d_in, d_latent=0, allow_empty=False, **kwargs):

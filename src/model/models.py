@@ -342,7 +342,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
 
         self.use_xyz = conf.get_bool("use_xyz", False)
 
-        self.num_oracle_training_rays = conf.get_bool("num_oracle_training_rays")
+        self.num_oracle_training_rays = conf.get_int("num_oracle_training_rays")
 
         assert self.use_encoder or self.use_xyz  # Must use some feature..
 

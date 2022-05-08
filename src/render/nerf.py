@@ -467,7 +467,7 @@ class OracleNeRFRenderer(NeRFRenderer):
 
             _, bins = predictions.shape
 
-            range = (rays[:, 8] - rays[:, 7]).reshape(B, 1)
+            range = (rays[:, 7] - rays[:, 6]).reshape(B, 1)
             z_nears = rays[:, 7].reshape(B, 1)
 
             indices = (((z_samp + z_nears) / range).detach() * bins) // 1

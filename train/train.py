@@ -568,7 +568,7 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
         bins = net.mlp_oracle.bins
 
         assert K % bins == 0
-        per_bin = K // self.bins
+        per_bin = K // bins
         weights = torch.reshape(weights, (B, bins, per_bin))
         bins_gt = torch.mean(weights, dim=2) # (SB * B, bins)
 

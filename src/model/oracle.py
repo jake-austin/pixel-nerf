@@ -34,9 +34,21 @@ class DepthOracleMemes(nn.Module):
 
     def get_encodings(self, latent):
         """
-        Here is where you take in latents of shape (SB, NS, B, K, latent)
+        Here is where you take in latents of shape 
+        (SB, NS, B, K, latent)
         and then spit out whatever shape you will use in forward
+        (SBxB, Bins, latent)
         """
+        SB, NS, B, K, D = latent.shape
+        latent = torch.permute(latent, (0, 2, 1, 3, 4))
+        latent = torch.reshape(latent, (SB * B, NS, K, D))
+        latent = torch.mean(latent, dim=1) # (SB * B, K, D)
+        assert K % self.bins == 0
+        per_bin = K // self.bins
+        latent = torch.reshape(latent, (SB * B, self.bins, per_bin, D))
+        latent = torch.mean(latent, dim=2) # (SB * B, bins, D)
+        return latent
+
 
 
     @classmethod

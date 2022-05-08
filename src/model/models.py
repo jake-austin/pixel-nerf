@@ -439,7 +439,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
 
             # Get the encodings
             if coarse:
-                mlp_input = self.get_oracle_encoding(xyz, xyz_rot, rays)
+                mlp_input = self.get_oracle_encoding(xyz, xyz_rot, rays, SB, B, K)
             else:
                 mlp_input = self.get_fine_encoding(xyz, xyz_rot, SB, B, viewdirs)
 
@@ -478,7 +478,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
                 return output
 
 
-    def get_oracle_encoding(self, xyz, rays):
+    def get_oracle_encoding(self, xyz, rays, SB, B, K):
 
         """
         rays are in world coordinates (SB*B, 8)
@@ -522,7 +522,8 @@ class OraclePixelNeRFNet(torch.nn.Module):
         # Grab encoder's latent code.
         uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B*K, 2)
 
-        SB, B, _ = uv.shape
+        #SB, B, _ = uv.shape
+
 
         uv *= repeat_interleave(
             self.focal.unsqueeze(1), NS if self.focal.shape[0] > 1 else 1
@@ -546,7 +547,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
         ### CHANGES START HERE
         ### CHANGES START HERE
 
-        latent = self.uninterleave(latent) # Shape (SB, NS, B, K, latent)
+        latent = self.uninterleave(latent, SB, NS, B, K) # Shape (SB, NS, B, K, latent)
 
         latent = self.mlp_oracle.get_encodings(latent) # Get whatever we want to pass into the model
 
@@ -554,12 +555,12 @@ class OraclePixelNeRFNet(torch.nn.Module):
 
 
 
-    def uninterleave(self, latent):
+    def uninterleave(self, latent, SB, NS, B, K):
         """
         Uninterleaves a tensor from shape (SB * NS, B*K, latent)
         to shape (SB, NS, B, K, latent)
         """
-        
+        return latent.reshape(SB, NS, B, K, -1)
 
 
     # DONE, this is just the original code to get the encodings

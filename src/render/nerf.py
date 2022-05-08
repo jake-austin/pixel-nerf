@@ -471,7 +471,10 @@ class OracleNeRFRenderer(NeRFRenderer):
             z_range = (rays[:, 7] - rays[:, 6]).reshape(sb*B, 1)
             z_nears = rays[:, 7].reshape(sb*B, 1)
 
-            indices = (((z_samp + z_nears) / z_range).detach() * bins) // 1
+            # Subtract the nears from the samples and divide by the range to get each xyz sample in range 0-1, then see which bin it is in
+            # (SB*B, K)
+            indices = (((z_samp - z_nears) / z_range).detach() * bins) // 1
+            indices = indices.long()
 
             # For each ray, we want to get the bin value at each index we have for that ray
             weights = []

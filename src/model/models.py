@@ -450,10 +450,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
             # Run main NeRF network
             if coarse:
                 mlp_output = self.mlp_oracle(
-                    mlp_input,
-                    combine_inner_dims=(self.num_views_per_obj, B),
-                    combine_index=combine_index,
-                    dim_size=dim_size,
+                    mlp_input
                 )
                 # shape (SB*B, bins)
                 return mlp_output

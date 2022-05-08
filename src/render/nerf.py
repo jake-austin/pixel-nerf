@@ -407,7 +407,7 @@ class OracleNeRFRenderer(NeRFRenderer):
                 oracle = oracle_predictions
             )
             with torch.no_grad():
-                indices = torch.randint(rays.shape[0], model.num_oracle_training_rays)
+                indices = torch.randint(rays.shape[0], [model.num_oracle_training_rays])
                 # weights (SB*B[indices], K), rgb (SB*B[indices], 3), depth (SB*B[indices])
                 oracle_training_gt = self.composite(model, rays[indices], z_coarse[indices], coarse=False)
             outputs.oracle_training = DotMap(oracle_training_gt=oracle_training_gt, indices=indices)

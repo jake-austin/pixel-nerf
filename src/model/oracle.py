@@ -16,7 +16,7 @@ class DepthOracleMemes(nn.Module):
         self.bins = bins
 
         self.network = nn.Sequential(
-            [nn.Linear(bins * latent, self.d_hidden), nn.ReLU(),
+            *[nn.Linear(bins * latent, self.d_hidden), nn.ReLU(),
                 nn.Linear(d_hidden, d_hidden), nn.ReLU(),
                 nn.Linear(d_hidden, d_hidden), nn.ReLU(),
                 nn.Linear(d_hidden, bins), nn.Sigmoid()

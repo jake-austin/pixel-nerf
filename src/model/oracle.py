@@ -11,6 +11,8 @@ import util
 class DepthOracleMemes(nn.Module):
     def __init__(self, latent, d_hidden, bins):
 
+        super().__init__()
+
         self.latent = latent
         self.d_hidden = d_hidden
         self.bins = bins

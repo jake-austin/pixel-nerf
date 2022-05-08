@@ -468,16 +468,16 @@ class OracleNeRFRenderer(NeRFRenderer):
 
             _, bins = predictions.shape
 
-            range = (rays[:, 7] - rays[:, 6]).reshape(B, 1)
-            z_nears = rays[:, 7].reshape(B, 1)
+            range = (rays[:, 7] - rays[:, 6]).reshape(sb*B, 1)
+            z_nears = rays[:, 7].reshape(sb*B, 1)
 
             indices = (((z_samp + z_nears) / range).detach() * bins) // 1
 
             # For each ray, we want to get the bin value at each index we have for that ray
             weights = []
-            for i in range(B):
+            for i in range(sb*B):
                 weights.append(predictions[i][indices[i]])
-            weights = torch.stack(weights).reshape(B, K)
+            weights = torch.stack(weights).reshape(sb*B, K)
 
             depth_final = torch.sum(weights * z_samp, -1)  # (SB*B)
 

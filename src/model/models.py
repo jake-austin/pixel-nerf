@@ -455,7 +455,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
                     combine_index=combine_index,
                     dim_size=dim_size,
                 )
-
+                # shape (SB*B, bins)
                 return mlp_output
 
             else:
@@ -487,34 +487,6 @@ class OraclePixelNeRFNet(torch.nn.Module):
         SB is batch of objects
         B is batch of points (in rays)
         NS is number of input views
-
-
-
-        ### Original Code:
-
-        # Grab encoder's latent code.
-        uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
-        uv *= repeat_interleave(
-            self.focal.unsqueeze(1), NS if self.focal.shape[0] > 1 else 1
-        )
-        uv += repeat_interleave(
-            self.c.unsqueeze(1), NS if self.c.shape[0] > 1 else 1
-        )  # (SB*NS, B, 2)
-        latent = self.encoder.index(
-            uv, None, self.image_shape
-        )  # (SB * NS, latent, B)
-
-        if self.stop_encoder_grad:
-            latent = latent.detach()
-        latent = latent.transpose(1, 2).reshape(
-            -1, self.latent_size
-        )  # (SB * NS * B, latent)
-
-        if self.d_in == 0:
-            # z_feature not needed
-            mlp_input = latent
-        else:
-            mlp_input = torch.cat((latent, z_feature), dim=-1)
         
         """
         NS = self.num_views_per_obj

@@ -26,10 +26,14 @@ class DepthOracleMemes(nn.Module):
 
     def forward(self, x):
         """
-        x: tensor of shape (..., bins, dim)
+        x: tensor of shape (SB * B, bins, D)
+
+        returns: tensor of shape (SB*B, bins)
         """
 
-        return self.network(x.reshape())
+        _, bins, D = x.shape
+
+        return self.network(x.reshape(-1, bins * D))
 
 
     def get_encodings(self, latent):

@@ -4,6 +4,8 @@
 import sys
 import os
 
+from render.nerf import OracleNeRFRenderer
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
@@ -58,6 +60,12 @@ def extra_args(parser):
         default=None,
         help="Freeze encoder weights and only train MLP",
     )
+    parser.add_argument(
+        "--oracle",
+        action="store_true",
+        default=None,
+        help="use depth oracle"
+    )
     return parser
 
 
@@ -80,9 +88,15 @@ if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
 
-renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
-    device=device
-)
+if not args.oracle:
+    renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
+        device=device
+    )
+else:
+    assert not dset.lindisp
+    renderer = OracleNeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp).to(
+        device=device
+    )
 
 # Parallize
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
@@ -541,13 +555,30 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
         return loss_dict
 
 
+    # DONE
     def oracle_crit(self, render_dict):
         """
-        This 
+        This predicts the loss for the oracle supervision
         """
         oracle = render_dict.oracle
         fine = render_dict.fine
-        oracle_training = render_dict.oracle_training
+        oracle_training = render_dict.oracle_training  # weights (SB*B[indices], K), rgb (SB*B[indices], 3), depth (SB*B[indices])
+        weights, rgb, depth = oracle_training.oracle_training_gt
+        indices = oracle_training.indices
+        B, K = weights.shape
+
+        bins = net.mlp_oracle.bins
+
+        assert K % bins == 0
+        per_bin = K // self.bins
+        weights = torch.reshape(weights, (B, bins, per_bin))
+        bins_gt = torch.mean(weights, dim=2) # (SB * B, bins)
+
+        # shape (SB*B[indices], bins)
+        bins_predictions = oracle.predictions[indices]
+
+        return F.binary_cross_entropy(bins_predictions, bins_gt.detach())
+
 
     # DONE
     def vis_step(self, data, global_step, idx=None):
@@ -662,6 +693,8 @@ if args.no_wandb:
             entity="cs280_final_proj",
             config=config)
 #AC End
-
-trainer = PixelNeRFTrainer()
+if not args.oracle:
+    trainer = PixelNeRFTrainer()
+else:
+    trainer = OraclePixelNeRFTrainer()
 trainer.start()

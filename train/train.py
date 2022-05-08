@@ -521,13 +521,13 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
         loss_dict = {}
 
         oracle_loss = self.oracle_crit(render_dict)
-        loss_dict["rc"] = oracle_loss.item() * self.lambda_coarse
+        loss_dict["rc"] = oracle_loss.item() * self.lambda_oracle
 
 
         fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
         loss_dict["rf"] = fine_loss.item() * self.lambda_fine
 
-        full_loss = oracle_loss * self.lambda_coarse + fine_loss * self.lambda_fine
+        full_loss = oracle_loss * self.lambda_oracle + fine_loss * self.lambda_fine
 
         loss = full_loss
         if is_train:

@@ -406,7 +406,7 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
         self.lambda_oracle = conf.get_float("loss.lambda_oracle")
         self.lambda_fine = conf.get_float("loss.lambda_fine", 1.0)
         print(
-            "lambda oracle {} and fine {}".format(self.lambda_coarse, self.lambda_fine)
+            "lambda oracle {} and fine {}".format(self.lambda_oracle, self.lambda_fine)
         )
         #self.rgb_coarse_crit = loss.get_rgb_loss(conf["loss.rgb"], True) REPLACED BY BCE FOR ORACLE
         fine_loss_conf = conf["loss.rgb"]

@@ -214,6 +214,15 @@ class NeRFRenderer(torch.nn.Module):
             else:
                 for pnts in split_points:
                     val_all.append(model(pnts, coarse=coarse))
+
+            #AC Start
+            if model.split_net:
+                split_net_deltas = [v[1] for v in val_all]
+                val_all = [v[0] for v in val_all]
+            else:
+                split_net_deltas = None
+            #AC End
+
             points = None
             viewdirs = None
             # (B*K, 4) OR (SB, B'*K, 4)
@@ -246,6 +255,7 @@ class NeRFRenderer(torch.nn.Module):
                 weights,
                 rgb_final,
                 depth_final,
+                split_net_deltas
             )
 
     def forward(
@@ -305,12 +315,14 @@ class NeRFRenderer(torch.nn.Module):
     def _format_outputs(
         self, rendered_outputs, superbatch_size, want_weights=False,
     ):
-        weights, rgb, depth = rendered_outputs
+        weights, rgb, depth, split_net_deltas = rendered_outputs
         if superbatch_size > 0:
             rgb = rgb.reshape(superbatch_size, -1, 3)
             depth = depth.reshape(superbatch_size, -1)
             weights = weights.reshape(superbatch_size, -1, weights.shape[-1])
-        ret_dict = DotMap(rgb=rgb, depth=depth)
+        if split_net_deltas is not None:
+            split_net_deltas = split_net_deltas.reshape(split_net_deltas, -1, 4)
+        ret_dict = DotMap(rgb=rgb, depth=depth, split_net_deltas=split_net_deltas)
         if want_weights:
             ret_dict.weights = weights
         return ret_dict

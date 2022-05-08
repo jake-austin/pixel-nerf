@@ -212,6 +212,15 @@ class PixelNeRFTrainer(trainlib.Trainer):
             loss_dict["rf"] = fine_loss.item() * self.lambda_fine
 
         loss = rgb_loss
+        #AC Start: Add Split Net Delta Penalty Loss
+        if net.split_net:
+            delta_penalty = torch.mean(coarse.split_deltas ** 2)
+            delta_penalty += torch.mean(fine.split_deltas ** 2)
+            print("WARNING: Using default delta penalty coeff 1.")
+            loss_dict["dp"] = delta_penalty
+            delta_penalty *= 1
+            loss += delta_penalty
+        #AC End
         if is_train:
             loss.backward()
         loss_dict["t"] = loss.item()
@@ -229,6 +238,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         #AC Start: Log loss terms to wandb
         wandb.log({"Coarse Loss": loss_dict["rc"],
                    "Fine Loss": loss_dict["rf"],
+                   "Delta Penalty": loss_dict["dp"],
                    "Total Loss": loss_dict["t"],
                    "Coarse PSNR": coarse_psnr,
                    "Fine PSNR": fine_psnr})

@@ -13,9 +13,11 @@ import warnings
 
 
 class PixelNeRFNet(torch.nn.Module):
-    def __init__(self, conf, stop_encoder_grad=False):
+    def __init__(self, conf, stop_encoder_grad=False,
+                 split_net_submodel=False):
         """
         :param conf PyHocon config subtree 'model'
+        :param split_net_submodel Position only submodel used by split_net
         """
         super().__init__()
         self.encoder = make_encoder(conf["encoder"])
@@ -41,6 +43,17 @@ class PixelNeRFNet(torch.nn.Module):
 
         # Enable view directions
         self.use_viewdirs = conf.get_bool("use_viewdirs", False)
+
+        #AC Start
+        self.split_net = conf.get_bool("split_net", False)
+        if self.split_net:
+            assert self.use_viewdirs
+        if self.split_net_submodel:
+            self.use_viewdirs = False
+            self.split_net = False
+        else:
+            self.submodel = PixelNeRFNet(conf, split_net_submodel=True)
+        #AC End
 
         # Global image features?
         self.use_global_encoder = conf.get_bool("use_global_encoder", False)
@@ -72,6 +85,7 @@ class PixelNeRFNet(torch.nn.Module):
         self.mlp_fine = make_mlp(
             conf["mlp_fine"], d_in, d_latent, d_out=d_out, allow_empty=True
         )
+
         # Note: this is world -> camera, and bottom row is omitted
         self.register_buffer("poses", torch.empty(1, 3, 4), persistent=False)
         self.register_buffer("image_shape", torch.empty(2), persistent=False)
@@ -142,6 +156,11 @@ class PixelNeRFNet(torch.nn.Module):
 
         if self.use_global_encoder:
             self.global_encoder(images)
+
+        #AC Start
+        if self.split_net:
+            self.submodel.encode(images, poses, focal, z_bounds, c)
+        #AC End
 
     def forward(self, xyz, coarse=True, viewdirs=None, far=False):
         """
@@ -263,6 +282,14 @@ class PixelNeRFNet(torch.nn.Module):
             output_list = [torch.sigmoid(rgb), torch.relu(sigma)]
             output = torch.cat(output_list, dim=-1)
             output = output.reshape(SB, B, -1)
+
+        #AC Start
+        if self.split_net:
+            base_output = self.submodel(xyz, coarse, viewdirs, far)
+            delta = output
+            output = base_output + delta
+            return output, delta
+        #AC End
         return output
 
     def load_weights(self, args, opt_init=False, strict=True, device=None):
@@ -277,6 +304,11 @@ class PixelNeRFNet(torch.nn.Module):
         ckpt_name = (
             "pixel_nerf_init" if opt_init or not args.resume else "pixel_nerf_latest"
         )
+        #AC Start
+        if self.split_net:
+            ckpt_name = "split_" + ckpt_name
+            self.submodel.load_weights(args, opt_init, strict, device)
+        #AC End
         model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, ckpt_name)
 
         if device is None:
@@ -307,6 +339,13 @@ class PixelNeRFNet(torch.nn.Module):
 
         ckpt_name = "pixel_nerf_init" if opt_init else "pixel_nerf_latest"
         backup_name = "pixel_nerf_init_backup" if opt_init else "pixel_nerf_backup"
+
+        #AC Start
+        if self.split_net:
+            ckpt_name = "split_" + ckpt_name
+            backup_name = "split" + backup_name
+            self.submodel.save_weights(args, opt_init, train_dur)
+        #AC End
 
         ckpt_path = osp.join(args.checkpoints_path, args.name, ckpt_name)
         ckpt_backup_path = osp.join(args.checkpoints_path, args.name, backup_name)

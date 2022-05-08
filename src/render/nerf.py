@@ -457,6 +457,7 @@ class OracleNeRFRenderer(NeRFRenderer):
 
 
             points = points.reshape(sb, -1, K, 3)    # (SB, B, K, 3)
+            _, B, _, _ = points.shape
 
             ### CHANGES TO COMPOSITE START HERE, MODEL EXPECTS POINTS IN 
             ### CHANGES TO COMPOSITE START HERE

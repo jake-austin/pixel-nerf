@@ -468,10 +468,10 @@ class OracleNeRFRenderer(NeRFRenderer):
 
             _, bins = predictions.shape
 
-            range = (rays[:, 7] - rays[:, 6]).reshape(sb*B, 1)
+            z_range = (rays[:, 7] - rays[:, 6]).reshape(sb*B, 1)
             z_nears = rays[:, 7].reshape(sb*B, 1)
 
-            indices = (((z_samp + z_nears) / range).detach() * bins) // 1
+            indices = (((z_samp + z_nears) / z_range).detach() * bins) // 1
 
             # For each ray, we want to get the bin value at each index we have for that ray
             weights = []

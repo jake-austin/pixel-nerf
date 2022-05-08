@@ -16,7 +16,11 @@ class DepthOracleMemes(nn.Module):
         self.bins = bins
 
         self.network = nn.Sequential(
-            []
+            [nn.Linear(bins * latent, self.d_hidden), nn.ReLU(),
+                nn.Linear(d_hidden, d_hidden), nn.ReLU(),
+                nn.Linear(d_hidden, d_hidden), nn.ReLU(),
+                nn.Linear(d_hidden, bins), nn.Sigmoid()
+            ]
         )
     
 
@@ -24,6 +28,8 @@ class DepthOracleMemes(nn.Module):
         """
         x: tensor of shape (..., bins, dim)
         """
+
+        return self.network(x.reshape())
 
 
     def get_encodings(self, latent):

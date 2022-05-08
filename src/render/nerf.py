@@ -447,15 +447,15 @@ class OracleNeRFRenderer(NeRFRenderer):
         :param z_samp z positions sampled for each ray (SB*B, K)
         :param sb super-batch dimension; 0 = disable
 
-        :return weights (B, K), depth (B)
+        :return weights (SB*B, K), depth (SB*B)
         """
         with profiler.record_function("renderer_composite"):
             B, K = z_samp.shape
 
-            # (SB*B, K, 3)
-            points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6]
+            points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6] # (SB*B, K, 3)
 
-            points = points.reshape(sb, B, K, 3)
+
+            points = points.reshape(sb, B, K, 3)    # (SB, B, K, 3)
 
             ### CHANGES TO COMPOSITE START HERE, MODEL EXPECTS POINTS IN 
             ### CHANGES TO COMPOSITE START HERE
@@ -477,7 +477,7 @@ class OracleNeRFRenderer(NeRFRenderer):
                 weights.append(predictions[i][indices[i]])
             weights = torch.stack(weights).reshape(B, K)
 
-            depth_final = torch.sum(weights * z_samp, -1)  # (B)
+            depth_final = torch.sum(weights * z_samp, -1)  # (SB*B)
 
             return DotMap(
                 weights=weights,

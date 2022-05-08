@@ -395,6 +395,8 @@ class OracleNeRFRenderer(NeRFRenderer):
 
             z_coarse = self.sample_coarse(rays)  # (SB * B, Kc)
 
+            assert rays.shape[0] == z_coarse.shape[0]
+
             ### CHANGES START HERE
             ### CHANGES START HERE
             ### CHANGES START HERE
@@ -409,7 +411,7 @@ class OracleNeRFRenderer(NeRFRenderer):
             with torch.no_grad():
                 indices = torch.randint(rays.shape[0], [model.num_oracle_training_rays])
                 # weights (SB*B[indices], K), rgb (SB*B[indices], 3), depth (SB*B[indices])
-                oracle_training_gt = self.composite(model, rays[indices], z_coarse[indices], coarse=False, sb=superbatch_size)
+                oracle_training_gt = self.composite(model, rays[indices], z_coarse[indices], coarse=False)
             outputs.oracle_training = DotMap(oracle_training_gt=oracle_training_gt, indices=indices)
 
             if self.using_fine:

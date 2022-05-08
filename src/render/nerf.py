@@ -451,12 +451,12 @@ class OracleNeRFRenderer(NeRFRenderer):
         :return weights (SB*B, K), depth (SB*B), predictions (SB*B, bins)
         """
         with profiler.record_function("renderer_composite"):
-            B, K = z_samp.shape
+            _, K = z_samp.shape
 
             points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6] # (SB*B, K, 3)
 
 
-            points = points.reshape(sb, B, K, 3)    # (SB, B, K, 3)
+            points = points.reshape(sb, -1, K, 3)    # (SB, B, K, 3)
 
             ### CHANGES TO COMPOSITE START HERE, MODEL EXPECTS POINTS IN 
             ### CHANGES TO COMPOSITE START HERE

@@ -484,7 +484,7 @@ class OracleNeRFRenderer(NeRFRenderer):
 
             depth_final = torch.sum(weights * z_samp, -1)  # (SB*B)
 
-            return (
+            return DotMap(
                 weights=weights,
                 depth_final=depth_final,
                 predictions=predictions # (SB*B, bins)

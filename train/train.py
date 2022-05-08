@@ -561,7 +561,8 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
         oracle = render_dict.oracle
         fine = render_dict.fine
         oracle_training = render_dict.oracle_training  # weights (SB*B[indices], K), rgb (SB*B[indices], 3), depth (SB*B[indices])
-        weights, rgb, depth = oracle_training.oracle_training_gt
+        oracle_training_gt = oracle_training.oracle_training_gt
+        weights, rgb, depth = oracle_training_gt
         indices = oracle_training.indices
         B, K = weights.shape
 

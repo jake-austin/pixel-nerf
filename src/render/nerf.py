@@ -416,11 +416,11 @@ class OracleNeRFRenderer(NeRFRenderer):
                 all_samps = [z_coarse]
                 if self.n_fine - self.n_fine_depth > 0:
                     all_samps.append(
-                        self.sample_fine(rays, oracle_predictions[0].detach())
+                        self.sample_fine(rays, oracle_predictions.weights.detach())
                     )  # (B, Kf - Kfd)
                 if self.n_fine_depth > 0:
                     all_samps.append(
-                        self.sample_fine_depth(rays, oracle_predictions[1])
+                        self.sample_fine_depth(rays, oracle_predictions.depth_final)
                     )  # (B, Kfd)
                 z_combine = torch.cat(all_samps, dim=-1)  # (B, Kc + Kf)
                 z_combine_sorted, argsort = torch.sort(z_combine, dim=-1)
@@ -485,7 +485,7 @@ class OracleNeRFRenderer(NeRFRenderer):
             depth_final = torch.sum(weights * z_samp, -1)  # (SB*B)
 
             return (
-                weights,
-                depth_final,
-                predictions # (SB*B, bins)
+                weights=weights,
+                depth_final=depth_final,
+                predictions=predictions # (SB*B, bins)
             )

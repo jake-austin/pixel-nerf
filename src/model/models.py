@@ -439,7 +439,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
 
             # Get the encodings
             if coarse:
-                mlp_input = self.get_oracle_encoding(xyz, xyz_rot, rays, SB, B, K)
+                mlp_input = self.get_oracle_encoding(xyz, rays, SB, B, K)
             else:
                 mlp_input = self.get_fine_encoding(xyz, xyz_rot, SB, B, viewdirs)
 
@@ -521,7 +521,7 @@ class OraclePixelNeRFNet(torch.nn.Module):
 
         latent = self.uninterleave(latent, SB, NS, B, K) # Shape (SB, NS, B, K, latent)
 
-        latent = self.mlp_oracle.get_encodings(latent) # Get whatever we want to pass into the model
+        latent = self.mlp_oracle.get_encodings(latent, rays) # Get whatever we want to pass into the model
 
         return latent
 

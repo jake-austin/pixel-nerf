@@ -38,7 +38,7 @@ class DepthOracleMemes(nn.Module):
         return self.network(x.reshape(-1, bins * D))
 
 
-    def get_encodings(self, latent):
+    def get_encodings(self, latent, rays):
         """
         Here is where you take in latents of shape 
         (SB, NS, B, K, latent)
@@ -105,7 +105,7 @@ class DepthOracleNormals(nn.Module):
             return self.network(x)
 
 
-    def get_encodings(self, latent):
+    def get_encodings(self, latent, rays):
         """
         Here is where you take in latents of shape (SB, NS, B, K, latent)
         and then spit out whatever shape you will use in forward

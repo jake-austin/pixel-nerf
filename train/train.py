@@ -4,8 +4,6 @@
 import sys
 import os
 
-from render.nerf import OracleNeRFRenderer
-
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
@@ -13,7 +11,7 @@ sys.path.insert(
 import warnings
 import trainlib
 from model import make_model, loss
-from render import NeRFRenderer
+from render import NeRFRenderer, OracleNeRFRenderer
 from data import get_split_dataset
 import util
 import numpy as np

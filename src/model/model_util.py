@@ -32,7 +32,7 @@ def make_depth_oracle(conf, d_in, d_latent, **kwargs):
     if oracle_type == "normals":
         net = DepthOracleNormals.from_conf(conf, d_in, d_latent)
     elif oracle_type == "memes":
-        net = DepthOracleMemes.from_conf(conf, d_latent)
+        net = DepthOracleMemes.from_conf(conf, d_latent, **kwargs)
     else:
         raise NotImplementedError("Unsupported oracle type")
 

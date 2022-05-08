@@ -61,7 +61,7 @@ class DepthOracleMemes(nn.Module):
         return cls(
             d_latent,
             d_hidden=conf.get_int("d_hidden", 128),
-            bins=conf.get_int("output_bins")
+            bins=conf.get_int("output_bins"),
             **kwargs
         )
 

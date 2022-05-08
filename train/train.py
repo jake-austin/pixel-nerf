@@ -397,7 +397,7 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
 
     # DONE, only changes were to variable names and printouts
     def __init__(self):
-        super().__init__(net, dset, val_dset, args, conf["train"], device=device)
+        trainlib.Trainer.__init__(net, dset, val_dset, args, conf["train"], device=device)
         self.renderer_state_path = "%s/%s/_renderer" % (
             self.args.checkpoints_path,
             self.args.name,

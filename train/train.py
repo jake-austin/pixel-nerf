@@ -658,8 +658,7 @@ class OraclePixelNeRFTrainer(PixelNeRFTrainer):
                 alpha_fine_cmap,
             ]
 
-            vis_fine = np.hstack(vis_list)
-            vis = np.vstack((vis_fine))
+            vis = np.hstack(vis_list)
             rgb_psnr = rgb_fine_np
 
         psnr = util.psnr(rgb_psnr, gt)

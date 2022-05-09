@@ -219,6 +219,8 @@ class NeRFRenderer(torch.nn.Module):
             if model.split_net:
                 split_net_deltas = [v[1] for v in val_all]
                 val_all = [v[0] for v in val_all]
+                split_net_deltas = torch.cat(split_net_deltas, dim=eval_batch_dim)
+                split_net_deltas = split_net_deltas.reshape(B, K, -1)  # (B, K, 4)
             else:
                 split_net_deltas = None
             #AC End
@@ -321,7 +323,7 @@ class NeRFRenderer(torch.nn.Module):
             depth = depth.reshape(superbatch_size, -1)
             weights = weights.reshape(superbatch_size, -1, weights.shape[-1])
         if split_net_deltas is not None:
-            split_net_deltas = split_net_deltas.reshape(split_net_deltas, -1, 4)
+            split_net_deltas = split_net_deltas.reshape(superbatch_size, -1, 4)
         ret_dict = DotMap(rgb=rgb, depth=depth, split_net_deltas=split_net_deltas)
         if want_weights:
             ret_dict.weights = weights

@@ -48,6 +48,7 @@ class PixelNeRFNet(torch.nn.Module):
         self.split_net = conf.get_bool("split_net", False)
         if self.split_net:
             assert self.use_viewdirs
+        self.split_net_submodel = split_net_submodel
         if self.split_net_submodel:
             self.use_viewdirs = False
             self.split_net = False
@@ -110,6 +111,12 @@ class PixelNeRFNet(torch.nn.Module):
         :param c principal point None or () or (2) or (NS) or (NS, 2) [cx, cy],
         default is center of image
         """
+        #AC Start
+        orig_inp = [torch.clone(images), torch.clone(poses), 
+                    torch.clone(focal)]
+        orig_inp.append(None if z_bounds is None else torch.clone(z_bounds))
+        orig_inp.append(None if c is None else torch.clone(c))
+        #AC End
         self.num_objs = images.size(0)
         if len(images.shape) == 5:
             assert len(poses.shape) == 4
@@ -159,7 +166,7 @@ class PixelNeRFNet(torch.nn.Module):
 
         #AC Start
         if self.split_net:
-            self.submodel.encode(images, poses, focal, z_bounds, c)
+            self.submodel.encode(*orig_inp)
         #AC End
 
     def forward(self, xyz, coarse=True, viewdirs=None, far=False):
@@ -172,6 +179,9 @@ class PixelNeRFNet(torch.nn.Module):
         NS is number of input views
         :return (SB, B, 4) r g b sigma
         """
+        #AC Start
+        orig_inp = [torch.clone(xyz), coarse, viewdirs, far]
+        #AC End
         with profiler.record_function("model_inference"):
             SB, B, _ = xyz.shape
             NS = self.num_views_per_obj
@@ -285,7 +295,7 @@ class PixelNeRFNet(torch.nn.Module):
 
         #AC Start
         if self.split_net:
-            base_output = self.submodel(xyz, coarse, viewdirs, far)
+            base_output = self.submodel(*orig_inp)
             delta = output
             output = base_output + delta
             return output, delta

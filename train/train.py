@@ -214,8 +214,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
         loss = rgb_loss
         #AC Start: Add Split Net Delta Penalty Loss
         if net.split_net:
-            delta_penalty = torch.mean(coarse.split_deltas ** 2)
-            delta_penalty += torch.mean(fine.split_deltas ** 2)
+            delta_penalty = torch.mean(coarse.split_net_deltas ** 2)
+            delta_penalty += torch.mean(fine.split_net_deltas ** 2)
             print("WARNING: Using default delta penalty coeff 1.")
             loss_dict["dp"] = delta_penalty
             delta_penalty *= 1

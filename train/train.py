@@ -222,7 +222,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         if net.split_net:
             delta_penalty = torch.mean(coarse.split_net_deltas ** 2)
             delta_penalty += torch.mean(fine.split_net_deltas ** 2)
-            loss_dict["dp"] = delta_penalty
+            loss_dict["dp"] = delta_penalty.item()
             delta_penalty *= args.dp_coeff
             loss += delta_penalty
         #AC End

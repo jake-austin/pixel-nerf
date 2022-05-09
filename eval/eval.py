@@ -17,7 +17,7 @@ import skimage.measure
 import util
 from data import get_split_dataset
 from model import make_model
-from render import NeRFRenderer
+from render import NeRFRenderer, OracleNeRFRenderer
 import cv2
 import tqdm
 import ipdb
@@ -85,6 +85,12 @@ def extra_args(parser):
         action="store_true",
         help="Set to indicate poses may change between objects. In most of our datasets, the test set has fixed poses.",
     )
+    parser.add_argument(
+        "--oracle",
+        action="store_true",
+        default=None,
+        help="use depth oracle"
+    )
     return parser
 
 
@@ -133,9 +139,16 @@ if has_output:
 
 
 net = make_model(conf["model"]).to(device=device).load_weights(args)
-renderer = NeRFRenderer.from_conf(
-    conf["renderer"], lindisp=dset.lindisp, eval_batch_size=args.ray_batch_size
-).to(device=device)
+if not args.oracle:
+    renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
+        device=device
+    )
+else:
+    assert not dset.lindisp
+    renderer = OracleNeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp).to(
+        device=device
+    )
+
 if args.coarse:
     net.mlp_fine = None
 

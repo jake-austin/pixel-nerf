@@ -51,6 +51,12 @@ def extra_args(parser):
         default=None,
         help="Freeze encoder weights and only train MLP",
     )
+    parser.add_argument(
+        "-dp_coeff",
+        type=float,
+        default=1.0,
+        help="If split_net loss coefficient of delta_penalty",
+    )
     return parser
 
 
@@ -216,9 +222,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
         if net.split_net:
             delta_penalty = torch.mean(coarse.split_net_deltas ** 2)
             delta_penalty += torch.mean(fine.split_net_deltas ** 2)
-            print("WARNING: Using default delta penalty coeff 1.")
             loss_dict["dp"] = delta_penalty
-            delta_penalty *= 1
+            delta_penalty *= args.dp_coeff
             loss += delta_penalty
         #AC End
         if is_train:

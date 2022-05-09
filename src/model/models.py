@@ -296,8 +296,7 @@ class PixelNeRFNet(torch.nn.Module):
         #AC Start
         if self.split_net:
             base_output = self.submodel(*orig_inp)
-            delta = output
-            output = base_output + delta
+            delta = output - base_output
             return output, delta
         #AC End
         return output
